@@ -1,0 +1,203 @@
+---
+title: 'STAT 311 Final Project Part 1: EDA'
+author: "Timila Kulkarni"
+date: "`r Sys.Date()`"
+output: openintro::lab_report
+---
+
+```{r load-packages, message=FALSE}
+library(tidyverse)
+library(openintro)
+library(alr4)
+library(car) # for scatter plot function
+library (ggpubr) #for ggarrange function
+```
+
+```{r read in Housing data}
+Housing <- read_csv("Housing_Group31.csv", show_col_types=FALSE)
+Housing$comes_furnished <- factor(Housing$comes_furnished)
+levels(Housing$comes_furnished) <- c("not furnished", "furnished")
+Housing$cats_allowed <- factor(Housing$cats_allowed)
+levels(Housing$cats_allowed) <- c("cats not allowed", "cats allowed")
+```
+
+## Categorical Variables
+
+### Univariate explorations
+
+```{r tables of counts as percentages}
+# comes_furnished
+Housing %>% 
+  count(comes_furnished) %>%
+  mutate(Prop = round(n / sum(n) * 100, 1)) %>%
+  pivot_wider(id_cols = c(comes_furnished, Prop), names_from = comes_furnished, values_from = Prop)
+
+# cats_allowed
+Housing %>% 
+  count(cats_allowed) %>%
+  mutate(Prop = round(n / sum(n) * 100, 1)) %>%
+  pivot_wider(id_cols = c(cats_allowed, Prop), names_from = cats_allowed, values_from = Prop)
+```
+
+### Bivariate Explorations
+
+#### 2-way contingency tables
+
+```{r 2-way contingency tables}
+# with joint counts
+Housing %>%
+  count(comes_furnished, cats_allowed) %>%
+  pivot_wider(names_from = cats_allowed, values_from = n)
+
+# with row conditional percentages
+Housing %>%
+  count(comes_furnished, cats_allowed) %>%
+  group_by(comes_furnished) %>%
+  mutate(pct = round(n / sum(n) * 100, 1)) %>% 
+  pivot_wider(id_cols = c(comes_furnished, cats_allowed), names_from = cats_allowed, values_from = pct)
+```
+
+#### Bar Graphs
+
+```{r Bar Graphs}
+#jpeg(file="Bar_Graph.jpg", width = 450, height = 650) 
+ggplot(Housing, aes(x = comes_furnished, fill = cats_allowed)) + 
+  geom_bar(position = "fill") +
+  labs(y = "Proportion")
+#dev.off()
+```
+
+## Quantitative Variables
+
+### Univariate Explorations
+
+#### 7-number summaries
+
+```{r 7-number summaries}
+# price
+(sum.price <- Housing %>% summarize(Min = min(price, na.rm=TRUE), 
+                                  Q1 = quantile(price, 0.25, na.rm=TRUE),
+                                  Median = quantile(price, 0.50,
+                                                    na.rm=TRUE),
+                                  Q3 = quantile(price, 0.75, na.rm=TRUE),
+                                  Max = max(price, na.rm=TRUE),
+                                  mean = mean(price, na.rm=TRUE),
+                                  SD = sd(price, na.rm=TRUE)))
+
+# number of beds
+(sum.beds <- Housing %>% summarize(Min = min(beds, na.rm=TRUE), 
+                                  Q1 = quantile(beds, 0.25, na.rm=TRUE),
+                                  Median = quantile(beds, 0.50,
+                                                    na.rm=TRUE),
+                                  Q3 = quantile(beds, 0.75, na.rm=TRUE),
+                                  Max = max(beds, na.rm=TRUE),
+                                  mean = mean(beds, na.rm=TRUE),
+                                  SD = sd(beds, na.rm=TRUE)))
+```
+
+
+#### clean the data
+```{r clean up}
+Q.price <- quantile(Housing$price, probs=c(.25, .75), na.rm = FALSE)
+iqr.price <- IQR(Housing$price)
+
+Q.beds <- quantile(Housing$beds, probs=c(.25, .75), na.rm = FALSE)
+iqr.beds <- IQR(Housing$beds)
+
+Q.lat <- quantile(Housing$lat, probs=c(.25, .75), na.rm = TRUE)
+iqr.lat <- IQR(Housing$lat, na.rm = TRUE)
+
+new_Housing <- filter(Housing, price > (Q.price[1] - 1.5*iqr.price) & Housing$price < (Q.price[2]+1.5*iqr.price) & beds != 1100 & beds != 1000 & lat > (Q.lat[1] - 1.5*iqr.lat) & Housing$lat < (Q.lat[2]+1.5*iqr.lat))
+
+```
+
+#### Histograms
+
+```{r Histograms}
+#price
+#jpeg(file="Price_Hist.jpg", width = 450, height = 450) 
+ggplot(data = new_Housing, aes(x = price)) +
+  geom_histogram(aes(y = ..density..), bins=75, colour = 1, fill = "white") +
+  xlab("Price ($ per month)")
+#dev.off()
+
+# beds
+#jpeg(file="Beds_Hist.jpg", width = 450, height = 450) 
+ggplot(data = new_Housing, aes(x = beds)) +
+  geom_histogram(colour = 1, fill = "white", bins=10) + 
+  xlab("Number of beds")
+#dev.off()
+```
+
+#### Box Plots
+
+```{r Box Plots}
+price_box <- ggplot(Housing, aes(x=log(price), y="")) +
+        geom_boxplot() + 
+        xlab("Price ($ per month)") +
+        ylab("")
+price_box
+
+beds_box <- ggplot(Housing, aes(x=beds, y="")) +
+        geom_boxplot() + 
+        xlab("Number of beds") +
+        ylab("")
+beds_box
+```
+
+
+### Bivariate Explorations
+
+#### Scatterplot
+
+```{r Scatterplot}
+#jpeg(file="Scatterplot.jpg", width = 650, height = 650) 
+ggplot(new_Housing, aes(x=beds, y=price)) +
+  geom_point() + geom_abline(slope = 1, intercept = 0)
+#dev.off()
+
+#jpeg(file="Scatterplot_lat.jpg", width = 650, height = 650) 
+ggplot(new_Housing, aes(x=lat, y=price)) +
+  geom_point() + geom_abline(slope = 1, intercept = 0)
+#dev.off()
+```
+
+
+## Quantitative and Categorical Variables
+
+#### Faceted Histogram
+
+```{r Faceted Histogram}
+# Price by Cats Allowed
+ggplot(data = new_Housing, aes(x = price)) +
+  geom_histogram(aes(y = ..density..), bins = 50, colour = 1, fill = "white") + 
+  xlab("Price ($ per month)") + facet_wrap(vars(cats_allowed))
+
+# Price by Comes Furnished
+#jpeg(file="Furnished_Hist.jpg", width = 650, height = 650) 
+ggplot(data = new_Housing, aes(x = price)) +
+  geom_histogram(aes(y = ..density..), bins = 50, colour = 1, fill = "white") + 
+  xlab("Price ($ per month)") + facet_wrap(vars(comes_furnished))
+
+#dev.off()
+
+
+# Beds by Comes Furnished
+ggplot(data = new_Housing, aes(x = beds)) +
+  geom_histogram(aes(y = ..density..), bins = 10, colour = 1, fill = "white") + 
+  xlab("Number of Beds") + facet_wrap(vars(comes_furnished))
+
+#Beds by Cats Allowed
+ggplot(data = new_Housing, aes(x = beds)) +
+  geom_histogram(aes(y = ..density..), bins = 10, colour = 1, fill = "white") + 
+  xlab("Number of Beds") + facet_wrap(vars(cats_allowed))
+```
+
+#### Comparative Boxplots
+
+```{r Comparative Boxplots}
+#jpeg(file="BoxPlot.jpg", width = 700, height = 650) 
+ggplot(new_Housing, aes(x=comes_furnished, y=price)) + 
+  geom_boxplot() + xlab("Comes Furnished") +
+  ylab("Price ($ per month)")
+#dev.off()

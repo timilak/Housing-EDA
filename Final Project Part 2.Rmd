@@ -1,0 +1,187 @@
+---
+title: 'STAT 311 Final Project Part 2: Regression and Hypothesis Testing'
+author: "Timila Kulkarni"
+date: "`r Sys.Date()`"
+output: openintro::lab_report
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+library(tidyverse)
+library(BSDA)
+```
+
+```{r read in Housing data}
+Housing <- read_csv("Housing_Group31.csv", show_col_types=FALSE)
+Housing$comes_furnished <- factor(Housing$comes_furnished)
+levels(Housing$comes_furnished) <- c("not furnished", "furnished")
+Housing$cats_allowed <- factor(Housing$cats_allowed)
+levels(Housing$cats_allowed) <- c("cats not allowed", "cats allowed")
+```
+
+### Problem 1: Hypothesis Test
+
+```{r subset data and get SD}
+unfurnished <- select(filter(Housing, comes_furnished == "not furnished"), price)
+furnished <- select(filter(Housing, comes_furnished == "furnished"), price)
+sd(unfurnished$price)
+sd(furnished$price)
+```
+
+```{r furnishing HT}
+z.test(x=furnished, y=unfurnished, alternative = "less", mu=0, sigma.x = 66461.95, sigma.y = 4573591, conf.level=0.95)
+```
+
+
+### Problem 2: Regression
+
+```{r clean up}
+Q.price <- quantile(Housing$price, probs=c(.25, .75), na.rm = FALSE)
+iqr.price <- IQR(Housing$price)
+
+Q.lat <- quantile(Housing$lat, probs=c(.25, .75), na.rm = TRUE)
+iqr.lat <- IQR(Housing$lat, na.rm = TRUE)
+
+new_Housing <- filter(Housing, price < (Q.price[2]+1.5*iqr.price))
+```
+
+#### a)
+```{r linear regression}
+## to fit the regression line
+### regression of y on x or price on lat
+lm.out <- lm(new_Housing$price ~ new_Housing$lat)
+summary(lm.out)
+
+## the plot with the regression line
+#jpeg(file="regression.jpg", width = 650, height = 450)
+plot(new_Housing$lat, new_Housing$price, 
+     xlab="Latitude",
+     ylab="Price ($ per month)", pch=19)
+abline(lm.out, lty=2, lwd=2, col="blue")
+#dev.off()
+```
+
+#### b)
+```{r residuals}
+# Residual plot for fitted regression using fitted values
+#jpeg(file="residuals.jpg", width = 650, height = 450)
+par(mfrow=c(1,2))
+plot(fitted(lm.out), residuals(lm.out),
+     xlab="Fitted Values", ylab="Residuals")
+abline(h=0)
+hist(residuals(lm.out), xlab="Residuals", main="")
+#dev.off()
+```
+
+#### c)
+```{r get 95%}
+qt(0.025, 364356)
+```
+
+CI: 4.6999 +/- (-1.95997)(0.1193)
+
+
+#### d)
+```{r 95% for E}
+lm2.out <- lm(price ~ lat, data=data.frame(new_Housing))
+Q3 <- quantile(new_Housing$lat, 0.75, na.rm=TRUE)
+Q3
+
+new.lat <- data.frame(lat = c(Q3))
+(CI.lat75 <- predict(lm2.out,
+newdata = new.lat,
+interval = "confidence",
+level = 0.95))
+```
+
+
+#### e)
+```{r 95% PI}
+(PI.lat75 <- predict(lm2.out, 
+newdata = new.lat,
+interval = "prediction",
+level = 0.95))
+```
+
+
+## Matthew
+
+```{r read data}
+Housing <- read.csv("Housing_Group31.csv")
+```
+
+```{r scatterplot price and sqfeet}
+Housing.sub <- Housing %>% filter(price < 5000)
+Housing.sub2a <- Housing.sub %>% filter(price > 500)
+Housing.sub2b <- Housing.sub2a %>% filter(sqfeet > 500)
+Housing.sub3 <- Housing.sub2b %>% filter(sqfeet < 5000)
+
+plot(Housing.sub3$price, Housing.sub3$sqfeet, pch=16, col='steelblue',
+     main='price vs. square feet',
+     xlab='price', ylab='square feet')
+abline(lm.out, col="blue", lwd=2)
+```
+```{r lm}
+# fit a linear regression model for Square feet on price
+lm.out <- lm(Housing.sub3$sqfeet ~ Housing.sub3$price)
+summary(lm.out)
+```
+
+```{r Reg diagnostics}
+par(mfrow=c(2,2))
+plot(Housing.sub3$price, Housing.sub3$sqfeet, xlab="Price", pch=19,
+     ylab="Square Footage", cex.lab=1.25, cex.axis=1.25)
+abline(lm.out, col="blue", lwd=2)
+plot(Housing.sub3$price, residuals(lm.out), xlab="Price", pch=19,
+     ylab="Residuals", cex.lab=1.25, cex.axis=1.25)
+abline(h=0,col="blue")
+hist(residuals(lm.out), xlab="Residuals", main="")
+```
+
+### CIs for Difference Between Two Binomial Proportions
+```{r L4 Example Two Props}
+prop.test(x=c(1017.5,1221.5), n=c(384977,384977),
+          conf.level = 0.95, correct = FALSE)$conf.int
+```
+```{r regression of price on sqfeet}
+lm2.out <- lm(Housing.sub3$sqfeet ~ Housing.sub3$price)
+summary(lm2.out)
+plot(Housing.sub3$price, Housing.sub3$sqfeet, 
+     xlab="price",
+     ylab="Square feet", pch=19)
+abline(lm2.out, lty=2, lwd=2, col="blue")
+points(mean(Housing.sub3$price), mean(Housing.sub3$sqfeet),
+       pch=19, col="green")
+```
+
+
+```{r L2 Example 1}
+zsum.test(mean.x = 1221.5, sigma.x = 0.001026, 
+          n.x = 384977, mean.y = 1017.5, sigma.y = 1.355, 
+          n.y = 384977, conf.level=0.95)$conf.int
+```
+```{r summarize}
+(sum.weight <- Housing.sub3 %>% summarize(mean = mean(Housing.sub3$sqfeet, na.rm=TRUE),
+                                 SD = sd(Housing.sub3$sqfeet, na.rm=TRUE)))
+(sum.weight <- Housing.sub3 %>% summarize(Min = min(Housing.sub3$sqfeet, na.rm=TRUE), 
+                                  Q1 = quantile(Housing.sub3$sqfeet, 0.25, na.rm=TRUE),
+                                  Median = quantile(Housing.sub3$sqfeet, 0.50,
+                                                    na.rm=TRUE),
+                                  Q3 = quantile(Housing.sub3$sqfeet, 0.75, na.rm=TRUE),
+                                  Max = max(Housing.sub3$sqfeet, na.rm=TRUE),
+                                  mean = mean(Housing.sub3$sqfeet, na.rm=TRUE),
+                                  SD = sd(Housing.sub3$sqfeet, na.rm=TRUE)))
+```
+```{r CI for 75th percentile}
+zsum.test(mean.x = 121.5, sigma.x = 0.001026, 
+          n.x = 384977, mean.y = 1152, sigma.y = 1.355, 
+          n.y = 384977, conf.level=0.95)$conf.int
+```
+
+```{r CI and PI}
+lm2.out <- lm(Housing.sub3$price ~ Housing.sub3$sqfeet, data=data.frame(Housing.sub3))
+new.sqfeet <- data.frame(Housing.sub3$sqfeet == 1152)
+(CI.WT15 <- predict(lm2.out, newdata = new.sqfeet, interval = "confidence", level = 0.95))
+(PI.WT15 <- predict(lm2.out, newdata = new.sqfeet, interval = "prediction", level = 0.95))
+```
+
